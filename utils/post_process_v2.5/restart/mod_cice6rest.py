@@ -49,15 +49,15 @@ def read_cice4_grid(fl_grid, fld_read, IDM=4500, JDM=3297):
 
     return AA.reshape((JDM, IDM))
 
-def grid_rad2dgr(ulat,ulon, f180 = True):
+def grid_rad2dgr(ulat_rad, ulon_rad, f180 = True):
     """ 
     Convert CICE grid coordinates from radians to degrees.
     If f180 is True, convert longitude to the range
     -180 <= lon < 180.
     """
     rdn2dgr = 180.0 / np.pi
-    ulat = ulat * rdn2dgr
-    ulon = ulon * rdn2dgr
+    ulat = ulat_rad * rdn2dgr
+    ulon = ulon_rad * rdn2dgr
 
     # Normalize longitude to [0, 360)
     ulon = np.mod(ulon, 360.0)

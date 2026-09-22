@@ -31,8 +31,8 @@ Lfresh    = Lsub - Lvap       # Latent heat of melting of fresh ice (J/kg)
 cp_ice    = 2106.             # Specific heat of fresh ice (J/ kg/K)
 rhos      = 330.              # Density of snow (kg/m3)
 hs_min    = 1.e-4             # Min snow thickness for computing Tsno (m)
-nsal      = 0.407
-msal      = 0.573
+nsal      = 0.407             # Empirical constant in BL99 S profile formulation
+msal      = 0.573             # Empirical constant in BL99 S profile formulation
 min_salin = 0.1               # Threshold for brine pocket treatment
 saltmax   = 3.2               # Max S at ice base
 spval     = 1.e30             # Bad values
@@ -45,30 +45,8 @@ class CICE:
         self.nslyr = nslyr
         self.nx = nx
         self.ny = ny
-
         self.ntilyr = self.ncat * self.nilyr
         self.ntslyr = self.ncat * self.nslyr
-
-def check_depth_file(pthdpth, dpthfl):
-    """
-    Checks if input topography file is netcdf or unformatted binary *.a.
-    """
-    fldptha  = fldpthb = None
-    topo_nc = topo_ab = False
-
-    if dpthfl.endswith('.nc'):
-        fldpthnc = pthdpth
-        fdpthin = os.path.join(pthdpth, dpthfl)
-        topo_nc = True
-    elif dpthfl.endswith('.a'):
-        fldptha = dpthfl
-        fldpthb = fldptha.replace('.a', '.b')
-        ftopo   = fldptha.removesuffix('.a')
-        topo_ab = True
-    else:
-        raise ValueError(f"topo file {dpthfl} not recognized, expected *.a or *.nc")
-
-    return fldptha, fldpthb, topo_nc, topo_ab
 
 def read_cice6_grid(dirflnc, varnc):
     """Read CICE6 field varnc from a grid  netcdf file."""
@@ -233,25 +211,38 @@ def main():
     parser.add_argument("--fyaml", 
         help=f"yaml file with paths, filenames, params, default={fyaml}", 
         default=fyaml)
-    parser.add_argument("--rdate6", help="Required restart date in CICE6: YYYYMMDD[hh], default hh=0", 
+    parser.add_argument("--rdate", help="Required restart date in CICE6: YYYYMMDD[hh], default hh=0", 
                         required=True, type=int)
+    parser.add_argument("--infile", help="Input CICE4 restart file name, default: read from YAML")
+    parser.add_argument("--outfile", help="Output CICE6 restart file name, deafult: read from YAML")
+    parser.add_argument("--tmpfile", help="Template CICE6 restart file name, deafult: read from YAML")
     args = parser.parse_args()
 
-    fyaml  = args.fyaml 
-    rdate6 = args.rdate6 if args.rdate6 else None
+    fyaml   = args.fyaml
+    rdate6  = args.rdate
+    infile  = args.infile
+    outfile = args.outfile
+    tmpfile = args.tmpfile
 
     dnmb6 = mc6rest.dateint2datenum(rdate6)
     YR6, MM6, DD6, HH6 = mc6rest.datevec(dnmb6, round_hrs=True)[:4]
 
     with open(fyaml) as ff:
-      PATHS = safe_load(ff)
+        PATHS = safe_load(ff)
 
-    cicerst4 = PATHS["rest_names"]["cice4"]["flnm"]
-    cicerstT = PATHS["rest_names"]["tmplt"]["flnm"]
-    cicerst6 = PATHS["rest_names"]["cice6"]["flnm"].format(yr=YR6, mm=MM6, dd=DD6, hr=HH6)
+    cicerst4 = PATHS["rest_names"]["cice4"]["flnm"] if infile is None else infile
+    cicerstT = PATHS["rest_names"]["tmplt"]["flnm"] if tmpfile is None else tmpfile
+    cicerst6 = (
+        PATHS["rest_names"]["cice6"]["flnm"].format(
+        yr=YR6, mm=MM6, dd=DD6, hr=HH6
+        )
+        if outfile is None else outfile
+    )
     pthrst4  = PATHS["cice_paths"]["cice4"]["pth"]
     pthrstT  = PATHS["cice_paths"]["tmplt"]["pth"]
     pthrst6  = PATHS["cice_paths"]["cice6"]["pth"]
+
+    os.makedirs(pthrst6, exist_ok=True)
 
     fl_restart4 = os.path.join(pthrst4, cicerst4)
     fl_restartT = os.path.join(pthrstT, cicerstT)
@@ -278,10 +269,6 @@ def main():
     pthgrd  = PATHS["grid_topo"]["cice6"]["pthgrid"]
     grdfl   = PATHS["grid_topo"]["cice6"]["filegrid"]
     fgrdin  = os.path.join(pthgrd, grdfl)
-    pthdpth = PATHS["grid_topo"]["cice6"]["pthtopo"]
-    dpthfl  = PATHS["grid_topo"]["cice6"]["filedepth"]
-
-    fldptha, fldpthb, topo_nc, topo_ab = check_depth_file(pthdpth, dpthfl)
 
     # Create object with CICE4 grid parameters.
     nx    = PATHS["cice_params"]["cice4"]["nx"]
@@ -400,11 +387,11 @@ def main():
     for A in stress12.values():
         A[A > maskval] = 0.
 
-    # Read  CICE4 grid coordinates.
+    # Read  CICE4 grid, Bu points.
     ulati4 = mc6rest.read_cice4_grid(fgrdin4, 'ulati', IDM=cice4.nx, JDM=cice4.ny)
     uloni4 = mc6rest.read_cice4_grid(fgrdin4, 'uloni', IDM=cice4.nx, JDM=cice4.ny)
 
-    # Read CICE6 coordinates from restart template.
+    # Read CICE6 grid. 
     ulati6 = read_cice6_grid(fgrdin, 'ulat')
     uloni6 = read_cice6_grid(fgrdin, 'ulon')
 
@@ -429,7 +416,7 @@ def main():
     qsnon, qicen, vsnon_out =  energy_to_enthalpy(aicen, vicen, vsnon, eicen, esnon,
         cice4, rhos, Lfresh, cp_ice, puny, hs_min, Tsn_min)
 
-    # Interpolate from nilyr=4 in CICE4 to nilyr=7 ice layers in CICE6
+    # Interpolate from CICE4 ice layers to layers in CICE6.
     if not cice6.nilyr == cice4.nilyr:
         qicen = mc6rest.remap_enthalpy_bins(qicen, cice4.nilyr, cice6.nilyr)
 
@@ -542,8 +529,5 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
 
 
