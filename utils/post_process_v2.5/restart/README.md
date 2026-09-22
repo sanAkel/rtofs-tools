@@ -43,7 +43,7 @@ deletes the raw .tgz files to halve the storage footprint.
 
 **Wrapper Script:** `run_cice_restart_conversion.sh`
 
-**Python Engine:** `convert_cice_restart.py`
+**Python Engine:** `convert_cice4_to_cice6_restart.py`
 
 Translates the unformatted sequential binary CICE4 restart into a fully UFS-compliant CICE6 NetCDF4 restart.
 
@@ -51,7 +51,6 @@ Translates the unformatted sequential binary CICE4 restart into a fully UFS-comp
 ```bash
 ./run_cice_restart_conversion.sh <IN_DIR> <OUT_DIR> <YYYYMMDD> [options]
 ```
-
-Example: `./run_cice_restart_conversion.sh ../restart_in ../restart_out 20251215 --ktherm 2`
+Example: `./run_cice_restart_conversion.sh --rdate 20220118 --out rtofs_glo.20220118_00000.restart_cice.nc --in rtofs_glo.t00z.n-24.restart_cice --tmp iced.2025-05-08-00000.nc`
 
 **Note**: Optional `ktherm` was retained so that one can run CICE6 in a similar fashion as CICE4 with BL ice thermodynamics.
