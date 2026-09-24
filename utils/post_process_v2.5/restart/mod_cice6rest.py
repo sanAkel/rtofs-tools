@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-Utility subroutines for creating CICE6 restart file.
+Utility functions for creating CICE6 restart file.
 """
 import os
 import numpy as np

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Convert a CICE4 restart file to a CICE6 NetCDF restart.
-Missing variables required by CICE6 are added and initialized.
-Ice and snow energies are converted to enthalpy and
-remapped from the CICE4 vertical discretization to the CICE6
-layer structure using a conservative remapping scheme that
-preserves total column energy.
+Convert a CICE4 binary restart file to a CICE6 NetCDF restart.
+
+- Missing variables required by CICE6 are added and initialized.
+- Ice and snow energies are converted to enthalpy and
+  remapped from the CICE4 vertical discretization to the CICE6
+  layer structure using a conservative remapping scheme that
+  preserves total column energy.
 """
 
 import os
@@ -35,7 +36,7 @@ nsal      = 0.407             # Empirical constant in BL99 S profile formulation
 msal      = 0.573             # Empirical constant in BL99 S profile formulation
 min_salin = 0.1               # Threshold for brine pocket treatment
 saltmax   = 3.2               # Max S at ice base
-spval     = 1.e30             # Bad values
+spval     = 1.e30             # Bad/Missing values
 Tsn_min   = -100.             # minimum snow T
 
 class CICE:
@@ -49,7 +50,7 @@ class CICE:
         self.ntslyr = self.ncat * self.nslyr
 
 def read_cice6_grid(dirflnc, varnc):
-    """Read CICE6 field varnc from a grid  netcdf file."""
+    """Read CICE6 field varnc from a grid netcdf file."""
     with xr.open_dataset(dirflnc) as dset:
         AA = dset[varnc].data.squeeze()
 
@@ -192,8 +193,8 @@ def set_ncvar(dst, varname, A3d):
 def sice_lr_BL99(klr, Ni, aicen, puny, Smax=3.2, a=0.407, b=0.573):
     """   
     Compute ice S in a single ice layer for all categories
-    following the Bitz & Lipscomb (1999) formulation used in CICE4
-    aicen is a 3D array of ice partial areas by categories
+    following the Bitz & Lipscomb (1999) formulation used in CICE4.
+    aicen is a 3D array of ice partial areas by categories.
     """
     if klr > Ni: 
         raise Exception (f'klr {klr} cannot be > {Ni}')
@@ -260,6 +261,14 @@ def main():
     print(f'CICE6 grid:          {ice_grid6}')
     print(' =================================== \n')
 
+    # Sanity check of inputs
+    # Read fields from the CICE4 restart file.
+    if not os.path.exists(fl_restart4):
+        raise FileNotFoundError(f"Does not exist: {fl_restart4}")
+
+    if not os.path.isfile(fl_restartT):
+        raise FileNotFoundError(f"CICE6 restart template not found {fl_restartT}")
+
     # Grid CICE4 unformatted binary file.
     pthgrd4 = PATHS["grid_topo"]["cice4"]["pthgrid"]
     grdfl4  = PATHS["grid_topo"]["cice4"]["filegrid"]
@@ -286,9 +295,6 @@ def main():
     nslyr = PATHS["cice_params"]["cice6"]["nslyr"]
     cice6 = CICE(nx, ny, ncat, nilyr, nslyr)
 
-    # Read fields from the CICE4 restart file.
-    if not os.path.exists(fl_restart4):
-        raise FileNotFoundError(f"Does not exist: {fl_restart4}")
 
     print(f'Reading restart: {fl_restart4}')
     with open(fl_restart4, 'rb') as fid:
@@ -467,8 +473,6 @@ def main():
     print(' \n\n -------------')
     print('Creating CICE6 restart')
 
-    if not os.path.isfile(fl_restartT):
-        raise FileNotFoundError(f"CICE6 restart template not found {fl_restartT}")
 
     dst = xr.open_dataset(fl_restartT)
 
@@ -522,6 +526,7 @@ def main():
 
     dst.close()
 
+    # Sanity check of output
     if not os.path.isfile(fl_restart6):
       raise Exception (f'ERR: CICE6 restart was NOT CREATED: {fl_restart6}')
 
