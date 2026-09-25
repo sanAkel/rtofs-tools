@@ -209,15 +209,28 @@ def sice_lr_BL99(klr, Ni, aicen, puny, Smax=3.2, a=0.407, b=0.573):
 def main():
     fyaml = 'restart_cice6.yaml'
     parser = argparse.ArgumentParser()
-    parser.add_argument("--fyaml", 
-        help=f"yaml file with paths, filenames, params, default={fyaml}", 
+    parser.add_argument("--fyaml",
+        help=f"yaml file with params, default={fyaml}",
         default=fyaml)
-    parser.add_argument("--rdate", help="Required restart date in CICE6: YYYYMMDD[hh], default hh=0", 
+    parser.add_argument("--machine", help="Machine ID (e.g. wcoss2, ursa)",
+                        required=True, choices=["wcoss2", "ursa"])
+    parser.add_argument("--rdate", help="Required restart date in CICE6: YYYYMMDD[hh], default hh=0",
                         required=True, type=int)
     parser.add_argument("--infile", help="Input CICE4 restart file name", required=True)
     parser.add_argument("--outfile", help="Output CICE6 restart file name (or output directory)", required=True)
     parser.add_argument("--tmpfile", help="Template CICE6 restart file name", required=True)
     args = parser.parse_args()
+
+    # Determine paths based on machine ID cleanly
+    if args.machine == "wcoss2":
+        # RTOFS v2.5 production
+        fgrdin4 = "/lfs/h1/ops/prod/packages/rtofs.v2.5.5/fix/rtofs_glo.navy_0.08.regional.cice.r"
+        # UFS fix path
+        fgrdin  = "/lfs/h2/emc/global/noscrub/emc.global/FIX/fix/cice/20240416/008/grid_cice_NEMS_mx008.nc"
+    elif args.machine == "ursa":
+        fix_dir = "/scratch5/NCEPDEV/rstprod/Santha.Akella/data/fix" # Update this path for Ursa if needed
+        fgrdin4 = os.path.join(fix_dir, "rtofs_glo.navy_0.08.regional.cice.r")
+        fgrdin  = os.path.join(fix_dir, "grid_cice_NEMS_mx008.nc")
 
     fyaml   = args.fyaml
     rdate6  = args.rdate
@@ -248,30 +261,26 @@ def main():
 
     print(' \n===================================')
     print(f'Creating CICE6 restart for {YR6}/{MM6:02d}/{DD6:02d} {HH6:02d}hr UTC')
+    print(f'Machine target:      {args.machine}')
     print(f'CICE4 restart:       {fl_restart4}')
     print(f'CICE6 template:      {fl_restartT}')
     print(f'New CICE6 restart:   {fl_restart6}')
-    print(f'CICE4 grid:          {ice_grid4}')
-    print(f'CICE6 grid:          {ice_grid6}')
+    print(f'CICE4 grid:          {ice_grid4} ({fgrdin4})')
+    print(f'CICE6 grid:          {ice_grid6} ({fgrdin})')
     print(' =================================== \n')
 
     # Sanity check of inputs
-    # Read fields from the CICE4 restart file.
     if not os.path.exists(fl_restart4):
         raise FileNotFoundError(f"Does not exist: {fl_restart4}")
 
     if not os.path.isfile(fl_restartT):
         raise FileNotFoundError(f"CICE6 restart template not found {fl_restartT}")
 
-    # Grid CICE4 unformatted binary file.
-    pthgrd4 = PATHS["grid_topo"]["cice4"]["pthgrid"]
-    grdfl4  = PATHS["grid_topo"]["cice4"]["filegrid"]
-    fgrdin4 = os.path.join(pthgrd4, grdfl4)
+    if not os.path.isfile(fgrdin4):
+        raise FileNotFoundError(f"CICE4 grid file not found in fix directory: {fgrdin4}")
 
-    # Grid and topo CICE6 files.
-    pthgrd  = PATHS["grid_topo"]["cice6"]["pthgrid"]
-    grdfl   = PATHS["grid_topo"]["cice6"]["filegrid"]
-    fgrdin  = os.path.join(pthgrd, grdfl)
+    if not os.path.isfile(fgrdin):
+        raise FileNotFoundError(f"CICE6 grid file not found in fix directory: {fgrdin}")
 
     # Create object with CICE4 grid parameters.
     nx    = PATHS["cice_params"]["cice4"]["nx"]
@@ -293,11 +302,6 @@ def main():
     print(f'Reading restart: {fl_restart4}')
     with open(fl_restart4, 'rb') as fid:
         # Read the 1st sequential record of CICE4 restart file.
-        # recS:     4-byte record-length marker (start marker)
-        # istep:    current model step
-        # runtime:  total elapsed model time (s)
-        # frtime:   elapsed time since the last forcing update (s)
-        # recE:     record-length marker (end marker)
         recS    = np.fromfile(fid, dtype='>i4', count=1)[0]
         istep   = np.fromfile(fid, dtype='>i4', count=1)[0]
         runtime = np.fromfile(fid, dtype='>f8', count=1)[0]
@@ -316,7 +320,7 @@ def main():
         nx     = cice4.nx
         ny     = cice4.ny
         ncat   = cice4.ncat
-        ntilyr = cice4.ntilyr  # total # of icelrs * cat 
+        ntilyr = cice4.ntilyr # total # of icelrs * cat
         ntslyr = cice4.ntslyr
 
         aicen = np.zeros((ncat,ny,nx), dtype='float64')
