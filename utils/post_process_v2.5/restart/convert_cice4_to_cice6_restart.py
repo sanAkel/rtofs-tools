@@ -214,9 +214,9 @@ def main():
         default=fyaml)
     parser.add_argument("--rdate", help="Required restart date in CICE6: YYYYMMDD[hh], default hh=0", 
                         required=True, type=int)
-    parser.add_argument("--infile", help="Input CICE4 restart file name, default: read from YAML")
-    parser.add_argument("--outfile", help="Output CICE6 restart file name, deafult: read from YAML")
-    parser.add_argument("--tmpfile", help="Template CICE6 restart file name, deafult: read from YAML")
+    parser.add_argument("--infile", help="Input CICE4 restart file name", required=True)
+    parser.add_argument("--outfile", help="Output CICE6 restart file name (or output directory)", required=True)
+    parser.add_argument("--tmpfile", help="Template CICE6 restart file name", required=True)
     args = parser.parse_args()
 
     fyaml   = args.fyaml
@@ -231,23 +231,17 @@ def main():
     with open(fyaml) as ff:
         PATHS = safe_load(ff)
 
-    cicerst4 = PATHS["rest_names"]["cice4"]["flnm"] if infile is None else infile
-    cicerstT = PATHS["rest_names"]["tmplt"]["flnm"] if tmpfile is None else tmpfile
-    cicerst6 = (
-        PATHS["rest_names"]["cice6"]["flnm"].format(
-        yr=YR6, mm=MM6, dd=DD6, hr=HH6
-        )
-        if outfile is None else outfile
-    )
-    pthrst4  = PATHS["cice_paths"]["cice4"]["pth"]
-    pthrstT  = PATHS["cice_paths"]["tmplt"]["pth"]
-    pthrst6  = PATHS["cice_paths"]["cice6"]["pth"]
+    fl_restart4 = infile
+    fl_restartT = tmpfile
 
-    os.makedirs(pthrst6, exist_ok=True)
+    # If outfile provided is a directory, append the standard filename
+    if os.path.isdir(outfile) or outfile.endswith('/'):
+        cicerst6 = f"rtofs_glo.{YR6}{MM6:02d}{DD6:02d}_{HH6:02d}000.restart_cice.nc"
+        fl_restart6 = os.path.join(outfile, cicerst6)
+    else:
+        fl_restart6 = outfile
 
-    fl_restart4 = os.path.join(pthrst4, cicerst4)
-    fl_restartT = os.path.join(pthrstT, cicerstT)
-    fl_restart6 = os.path.join(pthrst6, cicerst6)
+    os.makedirs(os.path.dirname(os.path.abspath(fl_restart6)), exist_ok=True)
 
     ice_grid4 = PATHS["cice_params"]["cice4"]["grid"]
     ice_grid6 = PATHS["cice_params"]["cice6"]["grid"]
@@ -512,7 +506,7 @@ def main():
     dst.attrs['mmonth'] = np.int32(MM6)
     dst.attrs['mday']   = np.int32(DD6)
     dst.attrs['msec']   = np.int32(HH6 * 3600)
-    dst.attrs['info1']  = f"Restart created from CICE4: {cicerst4}"
+    dst.attrs['info1']  = f"Restart created from CICE4: {os.path.basename(fl_restart4)}"
 
     print(f"Saving cice restart ---> {fl_restart6}")
     dst.to_netcdf(
@@ -534,5 +528,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
