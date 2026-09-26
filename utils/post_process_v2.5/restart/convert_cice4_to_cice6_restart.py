@@ -497,7 +497,8 @@ def main():
         nc.mmonth = np.int32(MM6)
         nc.mday   = np.int32(DD6)
         nc.msec   = np.int32(HH6 * 3600)
-        nc.info1  = f"Restart created from CICE4: {os.path.basename(fl_restart4)}"
+        nc.info1  = f"Restart created from CICE4: {os.path.basename(fl_restart4)} "
+                     "using https://github.com/NOAA-EMC/rtofs-tools"
 
     # Sanity check of output
     if not os.path.isfile(fl_restart6):
