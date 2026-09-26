@@ -213,9 +213,10 @@ def main():
         # UFS fix path
         fgrdin  = "/lfs/h2/emc/global/noscrub/emc.global/FIX/fix/cice/20240416/008/grid_cice_NEMS_mx008.nc"
     elif args.machine == "ursa":
-        fix_dir = "/scratch5/NCEPDEV/rstprod/Santha.Akella/data/fix" # Update this path for Ursa if needed
-        fgrdin4 = os.path.join(fix_dir, "rtofs_glo.navy_0.08.regional.cice.r")
-        fgrdin  = os.path.join(fix_dir, "grid_cice_NEMS_mx008.nc")
+        # RTOFS v2.5 copied from production on 09/26/2026
+        fgrdin4 = "/scratch5/NCEPDEV/rstprod/Santha.Akella/data/rtofs/v2p5/fix/rtofs_glo.navy_0.08.regional.cice.r"
+        # UFS fix path
+        fgrdin  = "/scratch3/NCEPDEV/global/role.glopara/fix/cice/20240416/008/grid_cice_NEMS_mx008.nc"
 
     fyaml   = args.fyaml
     rdate6  = args.rdate
@@ -497,8 +498,7 @@ def main():
         nc.mmonth = np.int32(MM6)
         nc.mday   = np.int32(DD6)
         nc.msec   = np.int32(HH6 * 3600)
-        nc.info1  = f"Restart created from CICE4: {os.path.basename(fl_restart4)} "
-                     "using https://github.com/NOAA-EMC/rtofs-tools"
+        nc.info1  = f"Restart created from CICE4: {os.path.basename(fl_restart4)} using https://github.com/NOAA-EMC/rtofs-tools"
 
     # Sanity check of output
     if not os.path.isfile(fl_restart6):
